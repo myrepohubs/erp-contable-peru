@@ -1,0 +1,134 @@
+// Este es tu archivo de esquema de Prisma,
+// puedes aprender más sobre él en la documentación: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========= ENUMS (Tipos predefinidos) =========
+enum TipoTercero {
+  CLIENTE
+  PROVEEDOR
+}
+
+enum TipoCuentaContable {
+  ACTIVO
+  PASIVO
+  PATRIMONIO
+  INGRESO
+  GASTO
+}
+
+enum EstadoAsiento {
+  BORRADOR
+  CUADRADO // El Debe y el Haber suman lo mismo
+  ANULADO
+}
+
+// ========= MODELOS DE DATOS =========
+
+// Modelo para Clientes y Proveedores
+model Tercero {
+  id          String      @id @default(uuid())
+  ruc         String      @unique
+  razonSocial String
+  direccion   String
+  tipo        TipoTercero
+
+  facturasVenta FacturaVenta[] // Relación de vuelta
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Modelo para el Plan Contable General Empresarial (PCGE)
+model PlanContable {
+  id          String             @id @default(uuid())
+  codigo      String             @unique
+  descripcion String
+  tipo        TipoCuentaContable
+
+  detalles DetalleAsiento[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Modelo para la cabecera de un Asiento Contable
+model AsientoContable {
+  id      Int      @id @default(autoincrement())
+  fecha   DateTime
+  glosa   String
+  estado  EstadoAsiento @default(BORRADOR)
+  
+  detalles DetalleAsiento[]
+  facturaVenta FacturaVenta? // Relación de vuelta
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Modelo para las líneas de detalle de un Asiento Contable
+model DetalleAsiento {
+  id          String   @id @default(uuid())
+  descripcion String
+  debe        Decimal  @db.Decimal(12, 2)
+  haber       Decimal  @db.Decimal(12, 2)
+  
+  asientoId Int
+  asiento   AsientoContable @relation(fields: [asientoId], references: [id])
+  
+  planContableId String
+  cuenta         PlanContable    @relation(fields: [planContableId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([asientoId, planContableId])
+}
+
+
+// ========= NUEVOS MODELOS PARA VENTAS =========
+
+model FacturaVenta {
+  id        String   @id @default(uuid())
+  serie     String
+  numero    Int
+  fechaEmision DateTime
+  
+  clienteId String
+  cliente   Tercero  @relation(fields: [clienteId], references: [id])
+  
+  subtotal  Decimal  @db.Decimal(12, 2)
+  igv       Decimal  @db.Decimal(12, 2)
+  total     Decimal  @db.Decimal(12, 2)
+  
+  asientoContableId Int? @unique
+  asientoContable   AsientoContable? @relation(fields: [asientoContableId], references: [id])
+  
+  detalles  DetalleFacturaVenta[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([serie, numero])
+}
+
+model DetalleFacturaVenta {
+  id           String   @id @default(uuid())
+  descripcion  String
+  cantidad     Int
+  precioUnitario Decimal @db.Decimal(12, 2)
+  subtotal     Decimal @db.Decimal(12, 2)
+  
+  facturaVentaId String
+  factura        FacturaVenta @relation(fields: [facturaVentaId], references: [id])
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
